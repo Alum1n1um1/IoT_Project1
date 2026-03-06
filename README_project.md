@@ -4,6 +4,8 @@ Une application Next.js pour analyser les menaces de cybersécurité dans les en
 
 ## Fonctionnalités
 
+- **SSR Complet** : Toutes les pages sont rendues côté serveur pour des performances optimales
+- **Authentification Sécurisée** : Système de connexion avec protection JWT (utilisateur par défaut: jules/martial)
 - **Surveillance des Menaces en Temps Réel** : Tableau de bord affichant les menaces actives et l'état des appareils
 - **Analyse des Menaces** : Vue détaillée des alertes de sécurité et de l'historique des menaces
 - **Gestion des Caméras** : Interface complète pour ajouter, modifier et supprimer les caméras IoT avec niveaux de criticité

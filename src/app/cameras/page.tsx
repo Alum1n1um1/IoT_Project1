@@ -1,0 +1,391 @@
+'use client'
+
+import { useState, useEffect } from 'react'
+import { Camera } from '../../services/cameraService'
+
+interface EditingCamera extends Camera {
+  isEditing: boolean
+}
+
+export default function CamerasPage() {
+  const [cameras, setCameras] = useState<EditingCamera[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [deleteModal, setDeleteModal] = useState<{ isOpen: boolean; camera?: Camera }>({ isOpen: false })
+  const [newCamera, setNewCamera] = useState({
+    name: '',
+    brand: '',
+    model: '',
+    criticity: 'medium' as const
+  })
+  const [isAddingCamera, setIsAddingCamera] = useState(false)
+
+  useEffect(() => {
+    fetchCameras()
+  }, [])
+
+  const fetchCameras = async () => {
+    try {
+      const response = await fetch('/api/cameras')
+      const data = await response.json()
+      
+      if (data.success) {
+        setCameras(data.cameras.map((camera: Camera) => ({ ...camera, isEditing: false })))
+      }
+    } catch (error) {
+      console.error('Error fetching cameras:', error)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleEdit = (cameraId: number) => {
+    setCameras(prev => prev.map(camera => 
+      camera.id === cameraId 
+        ? { ...camera, isEditing: true }
+        : { ...camera, isEditing: false }
+    ))
+  }
+
+  const handleCancelEdit = (cameraId: number) => {
+    setCameras(prev => prev.map(camera => 
+      camera.id === cameraId 
+        ? { ...camera, isEditing: false }
+        : camera
+    ))
+    fetchCameras() // Reset to original values
+  }
+
+  const handleSaveEdit = async (camera: EditingCamera) => {
+    try {
+      const response = await fetch(`/api/cameras/${camera.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name: camera.name,
+          brand: camera.brand,
+          model: camera.model,
+          criticity: camera.criticity
+        }),
+      })
+
+      if (response.ok) {
+        setCameras(prev => prev.map(c => 
+          c.id === camera.id 
+            ? { ...camera, isEditing: false }
+            : c
+        ))
+      }
+    } catch (error) {
+      console.error('Error updating camera:', error)
+    }
+  }
+
+  const handleDelete = async (camera: Camera) => {
+    try {
+      const response = await fetch(`/api/cameras/${camera.id}`, {
+        method: 'DELETE',
+      })
+
+      if (response.ok) {
+        setCameras(prev => prev.filter(c => c.id !== camera.id))
+        setDeleteModal({ isOpen: false })
+      }
+    } catch (error) {
+      console.error('Error deleting camera:', error)
+    }
+  }
+
+  const handleAddCamera = async () => {
+    if (!newCamera.name || !newCamera.brand || !newCamera.model) return
+
+    try {
+      const response = await fetch('/api/cameras', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(newCamera),
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        setCameras(prev => [{ ...data.camera, isEditing: false }, ...prev])
+        setNewCamera({ name: '', brand: '', model: '', criticity: 'medium' })
+        setIsAddingCamera(false)
+      }
+    } catch (error) {
+      console.error('Error adding camera:', error)
+    }
+  }
+
+  const getCriticityColor = (criticity: string) => {
+    switch (criticity) {
+      case 'critical': return 'text-red-400'
+      case 'high': return 'text-orange-400'
+      case 'medium': return 'text-yellow-400'
+      case 'low': return 'text-green-400'
+      default: return 'text-gray-400'
+    }
+  }
+
+  const getCriticityBg = (criticity: string) => {
+    switch (criticity) {
+      case 'critical': return 'bg-red-500/20 border-red-500'
+      case 'high': return 'bg-orange-500/20 border-orange-500'
+      case 'medium': return 'bg-yellow-500/20 border-yellow-500'
+      case 'low': return 'bg-green-500/20 border-green-500'
+      default: return 'bg-gray-500/20 border-gray-500'
+    }
+  }
+
+  if (isLoading) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="text-center text-gray-400">Chargement...</div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="flex justify-between items-center mb-8">
+        <h1 className="text-3xl font-bold text-white">Gestion Caméras</h1>
+        <button
+          onClick={() => setIsAddingCamera(true)}
+          className="cyber-button"
+        >
+          Ajouter Caméra
+        </button>
+      </div>
+
+      {/* Add Camera Form */}
+      {isAddingCamera && (
+        <div className="threat-card mb-6">
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-1">Nom</label>
+              <input
+                type="text"
+                value={newCamera.name}
+                onChange={(e) => setNewCamera(prev => ({ ...prev, name: e.target.value }))}
+                className="w-full px-3 py-2 bg-dark-bg border border-gray-600 rounded text-white"
+                placeholder="Nom de la caméra"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-1">Marque</label>
+              <input
+                type="text"
+                value={newCamera.brand}
+                onChange={(e) => setNewCamera(prev => ({ ...prev, brand: e.target.value }))}
+                className="w-full px-3 py-2 bg-dark-bg border border-gray-600 rounded text-white"
+                placeholder="Marque"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-1">Modèle</label>
+              <input
+                type="text"
+                value={newCamera.model}
+                onChange={(e) => setNewCamera(prev => ({ ...prev, model: e.target.value }))}
+                className="w-full px-3 py-2 bg-dark-bg border border-gray-600 rounded text-white"
+                placeholder="Modèle"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-1">Criticité</label>
+              <select
+                value={newCamera.criticity}
+                onChange={(e) => setNewCamera(prev => ({ ...prev, criticity: e.target.value as any }))}
+                className="w-full px-3 py-2 bg-dark-bg border border-gray-600 rounded text-white"
+              >
+                <option value="low">Faible</option>
+                <option value="medium">Moyenne</option>
+                <option value="high">Élevée</option>
+                <option value="critical">Critique</option>
+              </select>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={handleAddCamera}
+                className="px-4 py-2 bg-cyber-blue text-dark-bg rounded font-semibold hover:bg-opacity-80"
+              >
+                ✓
+              </button>
+              <button
+                onClick={() => {
+                  setIsAddingCamera(false)
+                  setNewCamera({ name: '', brand: '', model: '', criticity: 'medium' })
+                }}
+                className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
+              >
+                ✕
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Cameras Table */}
+      <div className="threat-card">
+        {cameras.length === 0 ? (
+          <div className="text-center py-8 text-gray-400">
+            Aucune caméra trouvée. Cliquez sur "Ajouter Caméra" pour commencer.
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left">
+              <thead>
+                <tr className="border-b border-gray-600">
+                  <th className="py-3 px-4 text-cyber-blue font-semibold">Nom</th>
+                  <th className="py-3 px-4 text-cyber-blue font-semibold">Marque</th>
+                  <th className="py-3 px-4 text-cyber-blue font-semibold">Modèle</th>
+                  <th className="py-3 px-4 text-cyber-blue font-semibold">Criticité</th>
+                  <th className="py-3 px-4 text-cyber-blue font-semibold">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {cameras.map((camera) => (
+                  <tr key={camera.id} className="border-b border-gray-700">
+                    {camera.isEditing ? (
+                      <>
+                        <td className="py-3 px-4">
+                          <input
+                            type="text"
+                            value={camera.name}
+                            onChange={(e) => setCameras(prev => prev.map(c =>
+                              c.id === camera.id ? { ...c, name: e.target.value } : c
+                            ))}
+                            className="w-full px-2 py-1 bg-dark-bg border border-gray-600 rounded text-white text-sm"
+                          />
+                        </td>
+                        <td className="py-3 px-4">
+                          <input
+                            type="text"
+                            value={camera.brand}
+                            onChange={(e) => setCameras(prev => prev.map(c =>
+                              c.id === camera.id ? { ...c, brand: e.target.value } : c
+                            ))}
+                            className="w-full px-2 py-1 bg-dark-bg border border-gray-600 rounded text-white text-sm"
+                          />
+                        </td>
+                        <td className="py-3 px-4">
+                          <input
+                            type="text"
+                            value={camera.model}
+                            onChange={(e) => setCameras(prev => prev.map(c =>
+                              c.id === camera.id ? { ...c, model: e.target.value } : c
+                            ))}
+                            className="w-full px-2 py-1 bg-dark-bg border border-gray-600 rounded text-white text-sm"
+                          />
+                        </td>
+                        <td className="py-3 px-4">
+                          <select
+                            value={camera.criticity}
+                            onChange={(e) => setCameras(prev => prev.map(c =>
+                              c.id === camera.id ? { ...c, criticity: e.target.value as any } : c
+                            ))}
+                            className="w-full px-2 py-1 bg-dark-bg border border-gray-600 rounded text-white text-sm"
+                          >
+                            <option value="low">Faible</option>
+                            <option value="medium">Moyenne</option>
+                            <option value="high">Élevée</option>
+                            <option value="critical">Critique</option>
+                          </select>
+                        </td>
+                        <td className="py-3 px-4">
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => handleSaveEdit(camera)}
+                              className="w-8 h-8 bg-cyber-blue text-dark-bg rounded hover:bg-opacity-80 flex items-center justify-center"
+                            >
+                              ✓
+                            </button>
+                            <button
+                              onClick={() => handleCancelEdit(camera.id)}
+                              className="w-8 h-8 bg-gray-600 text-white rounded hover:bg-gray-700 flex items-center justify-center"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        </td>
+                      </>
+                    ) : (
+                      <>
+                        <td className="py-3 px-4 font-medium text-white">{camera.name}</td>
+                        <td className="py-3 px-4 text-gray-300">{camera.brand}</td>
+                        <td className="py-3 px-4 text-gray-300">{camera.model}</td>
+                        <td className="py-3 px-4">
+                          <span className={`px-2 py-1 rounded text-xs font-semibold border ${getCriticityBg(camera.criticity)}`}>
+                            <span className={getCriticityColor(camera.criticity)}>
+                              {camera.criticity.charAt(0).toUpperCase() + camera.criticity.slice(1)}
+                            </span>
+                          </span>
+                        </td>
+                        <td className="py-3 px-4">
+                          <div className="relative">
+                            <details className="relative">
+                              <summary className="cursor-pointer text-gray-400 hover:text-white">
+                                ⋯
+                              </summary>
+                              <div className="absolute right-0 mt-2 w-32 bg-dark-card border border-gray-600 rounded shadow-lg z-10">
+                                <button
+                                  onClick={() => handleEdit(camera.id)}
+                                  className="block w-full text-left px-4 py-2 text-gray-300 hover:bg-gray-700"
+                                >
+                                  Modifier
+                                </button>
+                                <button
+                                  onClick={() => setDeleteModal({ isOpen: true, camera })}
+                                  className="block w-full text-left px-4 py-2 text-red-400 hover:bg-gray-700"
+                                >
+                                  Supprimer
+                                </button>
+                              </div>
+                            </details>
+                          </div>
+                        </td>
+                      </>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* Delete Modal */}
+      {deleteModal.isOpen && deleteModal.camera && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-dark-card border border-gray-600 rounded-lg p-6 max-w-md w-full mx-4">
+            <h3 className="text-lg font-semibold text-white mb-4">
+              Confirmer la suppression
+            </h3>
+            <p className="text-gray-300 mb-6">
+              Êtes-vous sûr de vouloir supprimer la caméra "{deleteModal.camera.name}" ?
+              Cette action est irréversible.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setDeleteModal({ isOpen: false })}
+                className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={() => deleteModal.camera && handleDelete(deleteModal.camera)}
+                className="px-4 py-2 bg-cyber-red text-white rounded hover:bg-red-700"
+              >
+                Supprimer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}

@@ -2,12 +2,30 @@
 
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
 export default function Navbar() {
   const pathname = usePathname()
   const router = useRouter()
   const [isRefreshing, setIsRefreshing] = useState(false)
+  const [user, setUser] = useState<{ username: string } | null>(null)
+
+  useEffect(() => {
+    // Check if user is logged in
+    checkAuth()
+  }, [])
+
+  const checkAuth = async () => {
+    try {
+      const response = await fetch('/api/auth/me')
+      if (response.ok) {
+        const data = await response.json()
+        setUser(data.user)
+      }
+    } catch (error) {
+      // User not authenticated
+    }
+  }
 
   const handleRefresh = async () => {
     setIsRefreshing(true)
@@ -24,6 +42,16 @@ export default function Navbar() {
       console.error('Failed to refresh data:', error)
     } finally {
       setIsRefreshing(false)
+    }
+  }
+
+  const handleLogout = async () => {
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' })
+      router.push('/login')
+      router.refresh()
+    } catch (error) {
+      console.error('Logout error:', error)
     }
   }
 
@@ -51,15 +79,32 @@ export default function Navbar() {
               href="/threats" 
               className={`nav-link ${pathname === '/threats' ? 'nav-link-active' : ''}`}
             >
-              Threat Analysis
+              Analyse Menaces
+            </Link>
+            <Link 
+              href="/cameras" 
+              className={`nav-link ${pathname === '/cameras' ? 'nav-link-active' : ''}`}
+            >
+              Gestion Caméras
             </Link>
             <button 
               className={`cyber-button ${isRefreshing ? 'opacity-50 cursor-not-allowed' : ''}`}
               onClick={handleRefresh}
               disabled={isRefreshing}
             >
-              {isRefreshing ? 'Refreshing...' : 'Refresh Data'}
+              {isRefreshing ? 'Actualisation...' : 'Actualiser'}
             </button>
+            {user && (
+              <div className="flex items-center space-x-3">
+                <span className="text-gray-300">Bonjour, {user.username}</span>
+                <button
+                  onClick={handleLogout}
+                  className="text-gray-400 hover:text-cyber-red transition-colors"
+                >
+                  Déconnexion
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>

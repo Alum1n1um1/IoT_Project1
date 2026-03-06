@@ -1,3 +1,4 @@
+import pool from '../lib/db'
 import { 
   ThreatsSummary, 
   IoTDeviceStatus, 
@@ -9,99 +10,40 @@ import {
 // Simulate API delay
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
-// Fake data generators
+// Generate fake threats (will be replaced with real threat intelligence APIs)
 const generateFakeThreats = (): Threat[] => {
   return [
     {
       id: '1',
-      type: 'Malware Detection',
-      description: 'Suspicious activity detected on IoT camera cluster',
+      type: 'Détection Malware',
+      description: 'Activité suspecte détectée sur cluster de caméras IoT',
       severity: 'high',
       timestamp: '2026-03-06T10:30:00Z',
-      source: 'Network Scanner'
+      source: 'Scanner Réseau'
     },
     {
       id: '2',
-      type: 'Unauthorized Access',
-      description: 'Multiple failed login attempts on smart thermostat',
+      type: 'Accès Non Autorisé',
+      description: 'Tentatives de connexion échouées multiples sur thermostat',
       severity: 'medium',
       timestamp: '2026-03-06T09:15:00Z',
-      source: 'Authentication Monitor'
+      source: 'Moniteur Authentification'
     },
     {
       id: '3',
-      type: 'Data Breach Attempt',
-      description: 'Unusual data transmission from smart doorbell',
+      type: 'Tentative Violation Données',
+      description: 'Transmission de données inhabituelle depuis sonnette connectée',
       severity: 'high',
       timestamp: '2026-03-06T08:45:00Z',
-      source: 'Traffic Analyzer'
+      source: 'Analyseur Trafic'
     },
     {
       id: '4',
-      type: 'Firmware Vulnerability',
-      description: 'Outdated firmware detected on smart lights',
+      type: 'Vulnérabilité Firmware',
+      description: 'Firmware obsolète détecté sur éclairages connectés',
       severity: 'low',
       timestamp: '2026-03-06T07:20:00Z',
-      source: 'Vulnerability Scanner'
-    }
-  ]
-}
-
-const generateFakeDevices = (): IoTDevice[] => {
-  return [
-    {
-      id: 'dev-001',
-      name: 'Smart Camera #1',
-      type: 'Security Camera',
-      status: 'vulnerable',
-      lastSeen: '2 minutes ago',
-      ipAddress: '192.168.1.101',
-      manufacturer: 'TechCorp'
-    },
-    {
-      id: 'dev-002',
-      name: 'Smart Thermostat',
-      type: 'Climate Control',
-      status: 'warning',
-      lastSeen: '5 minutes ago',
-      ipAddress: '192.168.1.102',
-      manufacturer: 'ClimaTech'
-    },
-    {
-      id: 'dev-003',
-      name: 'Smart Doorbell',
-      type: 'Access Control',
-      status: 'secure',
-      lastSeen: '1 minute ago',
-      ipAddress: '192.168.1.103',
-      manufacturer: 'SecureHome'
-    },
-    {
-      id: 'dev-004',
-      name: 'Smart Light Hub',
-      type: 'Lighting System',
-      status: 'secure',
-      lastSeen: '3 minutes ago',
-      ipAddress: '192.168.1.104',
-      manufacturer: 'LightTech'
-    },
-    {
-      id: 'dev-005',
-      name: 'Smart Speaker',
-      type: 'Voice Assistant',
-      status: 'warning',
-      lastSeen: '7 minutes ago',
-      ipAddress: '192.168.1.105',
-      manufacturer: 'VoiceTech'
-    },
-    {
-      id: 'dev-006',
-      name: 'Smart Refrigerator',
-      type: 'Kitchen Appliance',
-      status: 'secure',
-      lastSeen: '4 minutes ago',
-      ipAddress: '192.168.1.106',
-      manufacturer: 'KitchenSmart'
+      source: 'Scanner Vulnérabilités'
     }
   ]
 }
@@ -120,17 +62,72 @@ export async function getThreatsSummary(): Promise<ThreatsSummary> {
   }
 }
 
-export async function getIoTDeviceStatus(): Promise<IoTDeviceStatus> {
+// Get user's cameras and convert them to IoT devices for dashboard
+export async function getIoTDeviceStatus(userId: number): Promise<IoTDeviceStatus> {
   await delay(150) // Simulate API call
   
-  const devices = generateFakeDevices()
-  
-  return {
-    totalDevices: devices.length,
-    secureDevices: devices.filter(d => d.status === 'secure').length,
-    vulnerableDevices: devices.filter(d => d.status === 'vulnerable').length,
-    devices
+  try {
+    const client = await pool.connect()
+    
+    const result = await client.query(
+      'SELECT * FROM cameras WHERE user_id = $1',
+      [userId]
+    )
+    
+    client.release()
+    
+    const cameras = result.rows
+    
+    // Convert cameras to IoT devices with simulated status
+    const devices: IoTDevice[] = cameras.map((camera, index) => ({
+      id: camera.id.toString(),
+      name: camera.name,
+      type: 'Caméra de Sécurité',
+      status: getRandomStatus(camera.criticity),
+      lastSeen: getRandomLastSeen(),
+      ipAddress: `192.168.1.${100 + index}`,
+      manufacturer: camera.brand
+    }))
+    
+    return {
+      totalDevices: devices.length,
+      secureDevices: devices.filter(d => d.status === 'secure').length,
+      vulnerableDevices: devices.filter(d => d.status === 'vulnerable').length,
+      devices
+    }
+  } catch (error) {
+    console.error('Database error:', error)
+    // Fallback to empty data
+    return {
+      totalDevices: 0,
+      secureDevices: 0,
+      vulnerableDevices: 0,
+      devices: []
+    }
   }
+}
+
+// Helper functions
+function getRandomStatus(criticity: string): 'secure' | 'warning' | 'vulnerable' {
+  const random = Math.random()
+  
+  switch (criticity) {
+    case 'critical':
+      return random < 0.7 ? 'vulnerable' : random < 0.9 ? 'warning' : 'secure'
+    case 'high':
+      return random < 0.4 ? 'vulnerable' : random < 0.7 ? 'warning' : 'secure'
+    case 'medium':
+      return random < 0.2 ? 'vulnerable' : random < 0.5 ? 'warning' : 'secure'
+    case 'low':
+      return random < 0.1 ? 'vulnerable' : random < 0.3 ? 'warning' : 'secure'
+    default:
+      return 'secure'
+  }
+}
+
+function getRandomLastSeen(): string {
+  const minutes = Math.floor(Math.random() * 10) + 1
+  return `${minutes} minute${minutes > 1 ? 's' : ''}`
 }
 
 export async function getAllThreats(): Promise<Threat[]> {
@@ -141,27 +138,27 @@ export async function getAllThreats(): Promise<Threat[]> {
   const additionalThreats: Threat[] = [
     {
       id: '5',
-      type: 'Network Intrusion',
-      description: 'Suspicious network traffic detected from external IP',
+      type: 'Intrusion Réseau',
+      description: 'Trafic réseau suspect détecté depuis IP externe',
       severity: 'high',
       timestamp: '2026-03-06T06:30:00Z',
-      source: 'Network Monitor'
+      source: 'Moniteur Réseau'
     },
     {
       id: '6',
-      type: 'Device Tampering',
-      description: 'Physical tampering detected on smart lock',
+      type: 'Manipulation Appareil',
+      description: 'Manipulation physique détectée sur serrure connectée',
       severity: 'medium',
       timestamp: '2026-03-06T05:15:00Z',
-      source: 'Physical Security'
+      source: 'Sécurité Physique'
     },
     {
       id: '7',
-      type: 'DDoS Attack',
-      description: 'Distributed denial of service targeting smart hub',
+      type: 'Attaque DDoS',
+      description: 'Déni de service distribué ciblant hub connecté',
       severity: 'high',
       timestamp: '2026-03-06T04:45:00Z',
-      source: 'Traffic Monitor'
+      source: 'Moniteur Trafic'
     }
   ]
   
@@ -174,8 +171,8 @@ export async function getSecurityAlerts(): Promise<SecurityAlert[]> {
   return [
     {
       id: 'alert-001',
-      title: 'Critical Vulnerability in Smart Camera Firmware',
-      description: 'A critical security vulnerability has been discovered in the firmware of TechCorp smart cameras. This vulnerability could allow remote attackers to gain unauthorized access to camera feeds.',
+      title: 'Vulnérabilité Critique dans Firmware Caméras',
+      description: 'Une vulnérabilité critique a été découverte dans le firmware des caméras. Cette vulnérabilité pourrait permettre aux attaquants d\'accéder aux flux vidéo.',
       severity: 'critical',
       category: 'device',
       affectedDevices: ['dev-001'],
@@ -184,8 +181,8 @@ export async function getSecurityAlerts(): Promise<SecurityAlert[]> {
     },
     {
       id: 'alert-002',
-      title: 'Suspicious Authentication Patterns',
-      description: 'Multiple devices are showing unusual authentication patterns that may indicate a coordinated attack.',
+      title: 'Modèles d\'Authentification Suspects',
+      description: 'Plusieurs appareils montrent des modèles d\'authentification inhabituels qui pourraient indiquer une attaque coordonnée.',
       severity: 'high',
       category: 'authentication',
       affectedDevices: ['dev-002', 'dev-005'],
@@ -194,8 +191,8 @@ export async function getSecurityAlerts(): Promise<SecurityAlert[]> {
     },
     {
       id: 'alert-003',
-      title: 'Malware Signature Detected',
-      description: 'Known malware signatures have been detected in network traffic from several IoT devices.',
+      title: 'Signature Malware Détectée',
+      description: 'Des signatures de malware connues ont été détectées dans le trafic réseau de plusieurs appareils IoT.',
       severity: 'high',
       category: 'malware',
       affectedDevices: ['dev-001', 'dev-003'],
@@ -218,6 +215,6 @@ export async function refreshSecurityData(): Promise<{ success: boolean; message
   
   return {
     success: true,
-    message: 'Security data refreshed successfully. Found 3 new threats and 2 device updates.'
+    message: 'Données de sécurité actualisées avec succès. 3 nouvelles menaces et 2 mises à jour d\'appareils trouvées.'
   }
 }
