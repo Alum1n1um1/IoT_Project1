@@ -1,0 +1,27 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-dark-bg text-white;
+  }
+}
+
+@layer components {
+  .cyber-button {
+    @apply bg-cyber-blue text-dark-bg px-6 py-2 rounded font-semibold hover:bg-opacity-80 transition-colors;
+  }
+  
+  .threat-card {
+    @apply bg-dark-card border border-gray-700 rounded-lg p-4 hover:border-cyber-blue transition-colors;
+  }
+  
+  .nav-link {
+    @apply text-gray-300 hover:text-cyber-blue transition-colors px-3 py-2 rounded;
+  }
+  
+  .nav-link-active {
+    @apply text-cyber-blue bg-cyber-blue bg-opacity-10;
+  }
+}
