@@ -1,0 +1,19 @@
+# frontend/dockerfile
+FROM python:3.12-slim
+
+WORKDIR /app
+
+# dépendances
+COPY requirements.txt /app/requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
+
+# code + assets
+COPY . /app
+
+# Flask (port interne)
+ENV FLASK_APP=app.py
+ENV FLASK_RUN_HOST=0.0.0.0
+ENV FLASK_RUN_PORT=80
+EXPOSE 80
+
+CMD ["python", "app.py"]
