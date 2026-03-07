@@ -104,16 +104,33 @@ export async function updateCamera(userId: number, cameraId: number, cameraData:
 export async function deleteCamera(userId: number, cameraId: number): Promise<boolean> {
   try {
     const client = await pool.connect()
-    
+
     const result = await client.query(
       'DELETE FROM cameras WHERE user_id = $1 AND id = $2',
       [userId, cameraId]
     )
-    
+
     client.release()
     return result.rowCount !== null && result.rowCount > 0
   } catch (error) {
     console.error('Error deleting camera:', error)
     return false
+  }
+}
+
+export async function getCameraById(userId: number, cameraId: number): Promise<Camera | null> {
+  try {
+    const client = await pool.connect()
+
+    const result = await client.query(
+      'SELECT * FROM cameras WHERE id = $1 AND user_id = $2',
+      [cameraId, userId]
+    )
+
+    client.release()
+    return result.rows[0] || null
+  } catch (error) {
+    console.error('Error fetching camera:', error)
+    return null
   }
 }

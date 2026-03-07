@@ -1,94 +1,90 @@
 import pool from '../lib/db'
-import { 
-  ThreatsSummary, 
-  IoTDeviceStatus, 
-  Threat, 
-  IoTDevice, 
-  SecurityAlert 
+import {
+  ThreatsSummary,
+  IoTDeviceStatus,
+  Threat,
+  IoTDevice,
+  SecurityAlert
 } from '../types/security'
+import { vulnerabilityService } from './vulnerabilityService'
+import { getUserCameras } from './cameraService'
 
 // Simulate API delay
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
-// Generate fake threats (will be replaced with real threat intelligence APIs)
-const generateFakeThreats = (): Threat[] => {
-  return [
-    {
-      id: '1',
-      type: 'Détection Malware',
-      description: 'Activité suspecte détectée sur cluster de caméras IoT',
-      severity: 'high',
-      timestamp: '2026-03-06T10:30:00Z',
-      source: 'Scanner Réseau'
-    },
-    {
-      id: '2',
-      type: 'Accès Non Autorisé',
-      description: 'Tentatives de connexion échouées multiples sur thermostat',
-      severity: 'medium',
-      timestamp: '2026-03-06T09:15:00Z',
-      source: 'Moniteur Authentification'
-    },
-    {
-      id: '3',
-      type: 'Tentative Violation Données',
-      description: 'Transmission de données inhabituelle depuis sonnette connectée',
-      severity: 'high',
-      timestamp: '2026-03-06T08:45:00Z',
-      source: 'Analyseur Trafic'
-    },
-    {
-      id: '4',
-      type: 'Vulnérabilité Firmware',
-      description: 'Firmware obsolète détecté sur éclairages connectés',
-      severity: 'low',
-      timestamp: '2026-03-06T07:20:00Z',
-      source: 'Scanner Vulnérabilités'
-    }
-  ]
-}
 
 // Service functions
-export async function getThreatsSummary(): Promise<ThreatsSummary> {
+export async function getThreatsSummary(userId: number): Promise<ThreatsSummary> {
   await delay(100) // Simulate API call
-  
-  const threats = generateFakeThreats()
-  
-  return {
-    activeThreats: threats.filter(t => t.severity === 'high').length + 
-                   Math.floor(Math.random() * 5) + 3,
-    vulnerabilityScore: Math.floor(Math.random() * 30) + 65, // Score between 65-95
-    recentThreats: threats.slice(0, 4)
+
+  try {
+    // Get user's cameras and enrich with vulnerability data
+    const cameras = await getUserCameras(userId)
+    const enrichedDevices = await Promise.all(
+      cameras.map(camera => vulnerabilityService.enrichDeviceWithVulns(camera))
+    )
+
+    // Get all CVEs from enriched devices
+    const allCVEs = enrichedDevices.flatMap(d => d.vulnerabilities?.cves || [])
+
+    // Get all CVSS scores (for average calculation)
+    const allCVSSScores = enrichedDevices
+      .map(d => d.vulnerabilities?.cvssScore || 0)
+      .filter(score => score > 0)
+
+    // Build threats summary with real data
+    const activeThreats = enrichedDevices.reduce(
+      (sum, d) => sum + (d.vulnerabilities?.criticalCount || 0),
+      0
+    )
+
+    const vulnerabilityScore =
+      allCVSSScores.length > 0
+        ? Math.round(allCVSSScores.reduce((a, b) => a + b, 0) / allCVSSScores.length)
+        : 0
+
+    // Convert CVEs to Threat format, sorted by date
+    const recentThreats: Threat[] = allCVEs
+      .sort((a, b) => new Date(b.published).getTime() - new Date(a.published).getTime())
+      .slice(0, 4)
+      .map(cve => ({
+        id: cve.id,
+        type: 'CVE',
+        description: `${cve.id}: ${cve.descriptions[0]?.value.substring(0, 80) || 'No description'}`,
+        severity: vulnerabilityService.cvssToSeverity(cve.metrics.cvssV3?.baseScore),
+        timestamp: cve.published,
+        source: 'NVD'
+      }))
+
+    return {
+      activeThreats,
+      vulnerabilityScore,
+      recentThreats
+    }
+  } catch (error) {
+    console.error('Error in getThreatsSummary:', error)
+    // Return safe defaults on error
+    return {
+      activeThreats: 0,
+      vulnerabilityScore: 0,
+      recentThreats: []
+    }
   }
 }
 
 // Get user's cameras and convert them to IoT devices for dashboard
 export async function getIoTDeviceStatus(userId: number): Promise<IoTDeviceStatus> {
   await delay(150) // Simulate API call
-  
+
   try {
-    const client = await pool.connect()
-    
-    const result = await client.query(
-      'SELECT * FROM cameras WHERE user_id = $1',
-      [userId]
+    // Get user's cameras
+    const cameras = await getUserCameras(userId)
+
+    // Enrich each camera with vulnerability data
+    const devices: IoTDevice[] = await Promise.all(
+      cameras.map(camera => vulnerabilityService.enrichDeviceWithVulns(camera))
     )
-    
-    client.release()
-    
-    const cameras = result.rows
-    
-    // Convert cameras to IoT devices with simulated status
-    const devices: IoTDevice[] = cameras.map((camera, index) => ({
-      id: camera.id.toString(),
-      name: camera.name,
-      type: 'Caméra de Sécurité',
-      status: getRandomStatus(camera.criticity),
-      lastSeen: getRandomLastSeen(),
-      ipAddress: `192.168.1.${100 + index}`,
-      manufacturer: camera.brand
-    }))
-    
+
     return {
       totalDevices: devices.length,
       secureDevices: devices.filter(d => d.status === 'secure').length,
@@ -107,10 +103,11 @@ export async function getIoTDeviceStatus(userId: number): Promise<IoTDeviceStatu
   }
 }
 
-// Helper functions
+// Helper functions (deprecated - kept for backward compatibility)
+// Threat summary status is now based on real CVSS data
 function getRandomStatus(criticity: string): 'secure' | 'warning' | 'vulnerable' {
   const random = Math.random()
-  
+
   switch (criticity) {
     case 'critical':
       return random < 0.7 ? 'vulnerable' : random < 0.9 ? 'warning' : 'secure'
@@ -132,37 +129,11 @@ function getRandomLastSeen(): string {
 
 export async function getAllThreats(): Promise<Threat[]> {
   await delay(200) // Simulate API call
-  
-  // Generate more detailed threats for the threats page
-  const baseThreats = generateFakeThreats()
-  const additionalThreats: Threat[] = [
-    {
-      id: '5',
-      type: 'Intrusion Réseau',
-      description: 'Trafic réseau suspect détecté depuis IP externe',
-      severity: 'high',
-      timestamp: '2026-03-06T06:30:00Z',
-      source: 'Moniteur Réseau'
-    },
-    {
-      id: '6',
-      type: 'Manipulation Appareil',
-      description: 'Manipulation physique détectée sur serrure connectée',
-      severity: 'medium',
-      timestamp: '2026-03-06T05:15:00Z',
-      source: 'Sécurité Physique'
-    },
-    {
-      id: '7',
-      type: 'Attaque DDoS',
-      description: 'Déni de service distribué ciblant hub connecté',
-      severity: 'high',
-      timestamp: '2026-03-06T04:45:00Z',
-      source: 'Moniteur Trafic'
-    }
-  ]
-  
-  return [...baseThreats, ...additionalThreats]
+
+  // Return empty array - threats are now fetched dynamically from real CVE data
+  // This is kept for backward compatibility with threats page
+  // Real threat data is fetched from getThreatsSummary() which uses NVD data
+  return []
 }
 
 export async function getSecurityAlerts(): Promise<SecurityAlert[]> {

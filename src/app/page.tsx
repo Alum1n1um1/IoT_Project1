@@ -2,6 +2,7 @@ import { getThreatsSummary, getIoTDeviceStatus } from '../services/securityServi
 import { cookies } from 'next/headers'
 import { verifyToken } from '../services/authService'
 import { redirect } from 'next/navigation'
+import Link from 'next/link'
 
 export default async function Dashboard() {
   // Get authenticated user
@@ -18,7 +19,7 @@ export default async function Dashboard() {
   }
 
   // Fetch data server-side for SSR
-  const threatsSummary = await getThreatsSummary()
+  const threatsSummary = await getThreatsSummary(user.id)
   const deviceStatus = await getIoTDeviceStatus(user.id)
 
   return (
@@ -73,18 +74,36 @@ export default async function Dashboard() {
         <h3 className="text-xl font-semibold text-cyber-blue mb-4">État des Appareils IoT</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {deviceStatus.devices.map((device, index) => (
-            <div key={index} className="p-3 bg-gray-800 rounded">
+            <Link
+              key={index}
+              href={`/camera-details/${device.id}`}
+              className="p-3 bg-gray-800 rounded hover:bg-gray-700 transition-colors cursor-pointer block"
+            >
               <div className="flex items-center justify-between mb-2">
                 <h4 className="font-semibold text-white">{device.name}</h4>
-                <span className={`w-3 h-3 rounded-full ${
-                  device.status === 'secure' ? 'bg-cyber-green' :
-                  device.status === 'warning' ? 'bg-yellow-500' :
-                  'bg-cyber-red'
-                }`}></span>
+                <span
+                  className={`w-3 h-3 rounded-full ${
+                    device.status === 'secure'
+                      ? 'bg-cyber-green'
+                      : device.status === 'warning'
+                        ? 'bg-yellow-500'
+                        : 'bg-cyber-red'
+                  }`}
+                ></span>
               </div>
               <p className="text-sm text-gray-400">{device.type}</p>
-              <p className="text-xs text-gray-500">Vu: {device.lastSeen}</p>
-            </div>
+              {device.vulnerabilities && (
+                <div className="mt-2 pt-2 border-t border-gray-700">
+                  <p className="text-xs text-gray-500">
+                    {device.vulnerabilities.criticalCount} critique
+                    {device.vulnerabilities.criticalCount > 1 ? 's' : ''}, CVE Score:{' '}
+                    {device.vulnerabilities.cvssScore.toFixed(1)}/10
+                  </p>
+                </div>
+              )}
+              <p className="text-xs text-gray-500 mt-2">Vu: {device.lastSeen}</p>
+              <span className="text-xs text-cyber-blue mt-2 inline-block">Voir détails →</span>
+            </Link>
           ))}
         </div>
       </div>
