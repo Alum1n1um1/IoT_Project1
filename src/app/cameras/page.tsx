@@ -13,8 +13,8 @@ export default function CamerasPage() {
   const [deleteModal, setDeleteModal] = useState<{ isOpen: boolean; camera?: Camera }>({ isOpen: false })
   const [newCamera, setNewCamera] = useState({
     name: '',
-    brand: '',
-    model: '',
+    vendor: '',
+    product: '',
     criticity: 'medium' as const
   })
   const [isAddingCamera, setIsAddingCamera] = useState(false)
@@ -64,8 +64,8 @@ export default function CamerasPage() {
         },
         body: JSON.stringify({
           name: camera.name,
-          brand: camera.brand,
-          model: camera.model,
+          vendor: camera.vendor,
+          product: camera.product,
           criticity: camera.criticity
         }),
       })
@@ -98,7 +98,7 @@ export default function CamerasPage() {
   }
 
   const handleAddCamera = async () => {
-    if (!newCamera.name || !newCamera.brand || !newCamera.model) return
+    if (!newCamera.name || !newCamera.vendor || !newCamera.product) return
 
     try {
       const response = await fetch('/api/cameras', {
@@ -113,7 +113,7 @@ export default function CamerasPage() {
 
       if (data.success) {
         setCameras(prev => [{ ...data.camera, isEditing: false }, ...prev])
-        setNewCamera({ name: '', brand: '', model: '', criticity: 'medium' })
+        setNewCamera({ name: '', vendor: '', product: '', criticity: 'medium' })
         setIsAddingCamera(false)
       }
     } catch (error) {
@@ -179,8 +179,8 @@ export default function CamerasPage() {
               <label className="block text-sm font-medium text-gray-300 mb-1">Marque</label>
               <input
                 type="text"
-                value={newCamera.brand}
-                onChange={(e) => setNewCamera(prev => ({ ...prev, brand: e.target.value }))}
+                value={newCamera.vendor}
+                onChange={(e) => setNewCamera(prev => ({ ...prev, vendor: e.target.value }))}
                 className="w-full px-3 py-2 bg-dark-bg border border-gray-600 rounded text-white"
                 placeholder="Marque"
               />
@@ -189,8 +189,8 @@ export default function CamerasPage() {
               <label className="block text-sm font-medium text-gray-300 mb-1">Modèle</label>
               <input
                 type="text"
-                value={newCamera.model}
-                onChange={(e) => setNewCamera(prev => ({ ...prev, model: e.target.value }))}
+                value={newCamera.product}
+                onChange={(e) => setNewCamera(prev => ({ ...prev, product: e.target.value }))}
                 className="w-full px-3 py-2 bg-dark-bg border border-gray-600 rounded text-white"
                 placeholder="Modèle"
               />
@@ -218,7 +218,7 @@ export default function CamerasPage() {
               <button
                 onClick={() => {
                   setIsAddingCamera(false)
-                  setNewCamera({ name: '', brand: '', model: '', criticity: 'medium' })
+                  setNewCamera({ name: '', vendor: '', product: '', criticity: 'medium' })
                 }}
                 className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
               >
@@ -265,9 +265,9 @@ export default function CamerasPage() {
                         <td className="py-3 px-4">
                           <input
                             type="text"
-                            value={camera.brand}
+                            value={camera.vendor}
                             onChange={(e) => setCameras(prev => prev.map(c =>
-                              c.id === camera.id ? { ...c, brand: e.target.value } : c
+                              c.id === camera.id ? { ...c, vendor: e.target.value } : c
                             ))}
                             className="w-full px-2 py-1 bg-dark-bg border border-gray-600 rounded text-white text-sm"
                           />
@@ -275,9 +275,9 @@ export default function CamerasPage() {
                         <td className="py-3 px-4">
                           <input
                             type="text"
-                            value={camera.model}
+                            value={camera.product}
                             onChange={(e) => setCameras(prev => prev.map(c =>
-                              c.id === camera.id ? { ...c, model: e.target.value } : c
+                              c.id === camera.id ? { ...c, product: e.target.value } : c
                             ))}
                             className="w-full px-2 py-1 bg-dark-bg border border-gray-600 rounded text-white text-sm"
                           />
@@ -316,8 +316,8 @@ export default function CamerasPage() {
                     ) : (
                       <>
                         <td className="py-3 px-4 font-medium text-white">{camera.name}</td>
-                        <td className="py-3 px-4 text-gray-300">{camera.brand}</td>
-                        <td className="py-3 px-4 text-gray-300">{camera.model}</td>
+                        <td className="py-3 px-4 text-gray-300">{camera.vendor}</td>
+                        <td className="py-3 px-4 text-gray-300">{camera.product}</td>
                         <td className="py-3 px-4">
                           <span className={`px-2 py-1 rounded text-xs font-semibold border ${getCriticityBg(camera.criticity)}`}>
                             <span className={getCriticityColor(camera.criticity)}>

@@ -10,8 +10,8 @@ interface VulnerabilityData {
   device: {
     id: string
     name: string
-    brand: string
-    model: string
+    vendor: string
+    product: string
     criticality: string
     manufacturer: string
   }
@@ -103,11 +103,11 @@ export default function CameraDetails() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div>
             <p className="text-xs text-gray-500 uppercase tracking-wider">Marque</p>
-            <p className="text-lg font-semibold text-cyber-blue">{device.brand}</p>
+            <p className="text-lg font-semibold text-cyber-blue">{device.vendor}</p>
           </div>
           <div>
             <p className="text-xs text-gray-500 uppercase tracking-wider">Modèle</p>
-            <p className="text-lg font-semibold text-cyber-blue">{device.model}</p>
+            <p className="text-lg font-semibold text-cyber-blue">{device.product}</p>
           </div>
           <div>
             <p className="text-xs text-gray-500 uppercase tracking-wider">Criticité</p>

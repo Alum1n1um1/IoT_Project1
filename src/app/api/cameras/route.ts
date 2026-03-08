@@ -36,16 +36,16 @@ export async function POST(request: NextRequest) {
       )
     }
     
-    const { name, brand, model, criticity } = await request.json()
+    const { name, vendor, product, criticity } = await request.json()
     
-    if (!name || !brand || !model || !criticity) {
+    if (!name || !vendor || !product || !criticity) {
       return NextResponse.json(
         { success: false, message: 'Tous les champs sont requis' },
         { status: 400 }
       )
     }
     
-    const camera = await createCamera(user.id, { name, brand, model, criticity })
+    const camera = await createCamera(user.id, { name, vendor, product, criticity })
     
     if (camera) {
       return NextResponse.json({ success: true, camera })

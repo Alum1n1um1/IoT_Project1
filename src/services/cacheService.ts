@@ -11,7 +11,7 @@ class CacheService {
 
   /**
    * Get cached vulnerability data if not expired
-   * @param deviceKey Format: "brand:model" (lowercase)
+    * @param deviceKey Format: "vendor:product" (lowercase)
    * @returns Cached data or null if not found/expired
    */
   async get(deviceKey: string): Promise<VulnerabilityCacheEntry | null> {
@@ -32,7 +32,7 @@ class CacheService {
 
   /**
    * Store vulnerability data in cache with TTL
-   * @param deviceKey Format: "brand:model" (lowercase)
+    * @param deviceKey Format: "vendor:product" (lowercase)
    * @param data Vulnerability cache entry with TTL defined
    */
   async set(deviceKey: string, data: VulnerabilityCacheEntry): Promise<void> {

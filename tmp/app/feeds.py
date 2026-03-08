@@ -311,7 +311,6 @@ __all__ = [
 if __name__ == "__main__":
     # Initialize database schema
     db = Database()
-    db.init_schema()
 
     # Load data from NVD, KEV, and EPSS
     print("[NVD] Loading CVEs from NVD v2.0...")

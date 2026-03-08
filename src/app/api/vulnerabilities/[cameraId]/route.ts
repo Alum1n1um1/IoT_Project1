@@ -4,6 +4,32 @@ import { getCameraById } from '../../../../services/cameraService'
 import { vulnerabilityService } from '../../../../services/vulnerabilityService'
 import { cookies } from 'next/headers'
 
+const PYTHON_VULN_API_URL = process.env.PYTHON_VULN_API_URL || 'http://nvd-api:8000'
+
+async function triggerVulnerabilitySync(cameraId: number): Promise<void> {
+  try {
+    const response = await fetch(`${PYTHON_VULN_API_URL}/api/v1/sync`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        camera_ids: [cameraId],
+        max_results: 100
+      }),
+      signal: AbortSignal.timeout(30000)
+    })
+
+    if (!response.ok) {
+      const body = await response.text()
+      console.error('[VulnSync] Python API returned error:', response.status, body)
+    }
+  } catch (error) {
+    // Keep route resilient: if sync fails, we still return cached DB data.
+    console.error('[VulnSync] Failed to trigger Python sync API:', error)
+  }
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ cameraId: string }> }
@@ -35,6 +61,8 @@ export async function GET(
       return NextResponse.json({ error: 'Camera not found' }, { status: 404 })
     }
 
+    await triggerVulnerabilitySync(cameraId)
+
     // Enrich camera with vulnerability data
     const enrichedDevice = await vulnerabilityService.enrichDeviceWithVulns(camera)
 
@@ -43,8 +71,8 @@ export async function GET(
       device: {
         id: enrichedDevice.id,
         name: enrichedDevice.name,
-        brand: camera.brand,
-        model: camera.model,
+        vendor: camera.vendor,
+        product: camera.product,
         criticality: camera.criticity,
         manufacturer: enrichedDevice.manufacturer
       },

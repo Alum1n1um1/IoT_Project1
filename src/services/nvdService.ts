@@ -67,14 +67,14 @@ class NVDService {
   private REQUEST_DELAY = 200 // 5 req/sec max (200ms between requests)
 
   /**
-   * Main method: Search CVE by camera brand and model
+   * Main method: Search CVE by camera vendor and product
    */
-  async searchCVEs(brand: string, model: string): Promise<CVE[]> {
+  async searchCVEs(vendor: string, product: string): Promise<CVE[]> {
     // Try searches in order of specificity
     const searchStrategies = [
-      `"${brand}" "${model}"`, // Exact match
-      `${brand} ${model}`, // Phrase match
-      brand // Fallback to brand only
+      `"${vendor}" "${product}"`, // Exact match
+      `${vendor} ${product}`, // Phrase match
+      vendor // Fallback to vendor only
     ]
 
     for (const query of searchStrategies) {
@@ -87,7 +87,7 @@ class NVDService {
       }
     }
 
-    console.log(`[NVD] No CVEs found for "${brand}" "${model}"`)
+    console.log(`[NVD] No CVEs found for "${vendor}" "${product}"`)
     return []
   }
 

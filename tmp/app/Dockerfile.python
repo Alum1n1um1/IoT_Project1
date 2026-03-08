@@ -9,5 +9,5 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy the app code
 COPY . .
 
-# Run feed loader on startup
-CMD ["python", "feeds.py"]
+# Run vulnerability sync API service
+CMD ["python", "api_service.py"]

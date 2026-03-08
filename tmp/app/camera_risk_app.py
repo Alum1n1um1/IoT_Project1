@@ -270,7 +270,6 @@ def action_show_dashboard(db: Database) -> None:
 
 def main() -> None:
     db = Database()
-    db.init_schema()
 
     while True:
         print("\n=== Analyse de risque caméras IoT ===")

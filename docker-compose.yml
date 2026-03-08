@@ -1,19 +1,22 @@
 version: '3.8'
 
 services:
-  # NVD Vulnerability Data Loader (Python)
-  nvd-loader:
+  # Vulnerability sync API microservice (Python)
+  nvd-api:
     build:
       context: ./tmp/app
       dockerfile: Dockerfile.python
     environment:
       DATABASE_URL: "postgresql://postgres:password@postgres:5432/iot_security"
+      PORT: "8000"
+    ports:
+      - "8000:8000"
     depends_on:
       postgres:
         condition: service_healthy
     networks:
       - iot-security-network
-    restart: "no"  # Run once on startup only
+    restart: unless-stopped
 
   nextjs-app:
     build:
@@ -24,13 +27,13 @@ services:
     environment:
       - NODE_ENV=development
       - DATABASE_URL=postgresql://postgres:password@postgres:5432/iot_security
+      - PYTHON_VULN_API_URL=http://nvd-api:8000
     volumes:
       - .:/app
       - /app/node_modules
       - /app/.next
     depends_on:
-      nvd-loader:
-        condition: service_completed_successfully
+      - nvd-api
     networks:
       - iot-security-network
 

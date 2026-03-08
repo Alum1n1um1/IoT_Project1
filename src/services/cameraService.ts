@@ -3,8 +3,8 @@ import pool from '../lib/db'
 export interface Camera {
   id: number
   name: string
-  brand: string
-  model: string
+  vendor: string
+  product: string
   criticity: 'low' | 'medium' | 'high' | 'critical'
   created_at: string
   updated_at: string
@@ -12,8 +12,8 @@ export interface Camera {
 
 export interface CreateCameraData {
   name: string
-  brand: string
-  model: string
+  vendor: string
+  product: string
   criticity: 'low' | 'medium' | 'high' | 'critical'
 }
 
@@ -39,10 +39,10 @@ export async function createCamera(userId: number, cameraData: CreateCameraData)
     const client = await pool.connect()
     
     const result = await client.query(
-      `INSERT INTO cameras (user_id, name, brand, model, criticity) 
+      `INSERT INTO cameras (user_id, name, vendor, product, criticity) 
        VALUES ($1, $2, $3, $4, $5) 
        RETURNING *`,
-      [userId, cameraData.name, cameraData.brand, cameraData.model, cameraData.criticity]
+      [userId, cameraData.name, cameraData.vendor, cameraData.product, cameraData.criticity]
     )
     
     client.release()
@@ -66,14 +66,14 @@ export async function updateCamera(userId: number, cameraId: number, cameraData:
       values.push(cameraData.name)
       paramCounter++
     }
-    if (cameraData.brand) {
-      setParts.push(`brand = $${paramCounter}`)
-      values.push(cameraData.brand)
+    if (cameraData.vendor) {
+      setParts.push(`vendor = $${paramCounter}`)
+      values.push(cameraData.vendor)
       paramCounter++
     }
-    if (cameraData.model) {
-      setParts.push(`model = $${paramCounter}`)
-      values.push(cameraData.model)
+    if (cameraData.product) {
+      setParts.push(`product = $${paramCounter}`)
+      values.push(cameraData.product)
       paramCounter++
     }
     if (cameraData.criticity) {
