@@ -1,0 +1,23 @@
+# PDFs
+*.pdf
+
+# LaTeX intermediates
+*.aux
+*.bbl
+*.blg
+*.fdb_latexmk
+*.fls
+*.log
+*.out
+*.toc
+*.synctex.gz
+*.vrb
+*.snm
+*.nav
+
+# VSCode
+.vscode/
+
+# OS files
+.DS_Store
+Thumbs.db
