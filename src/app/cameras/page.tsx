@@ -87,7 +87,12 @@ export default function CamerasPage() {
   const triggerVulnerabilitySync = async (cameraIds: number[]) => {
     try {
       // Mark cameras as syncing
-      setSyncingCameras(prev => new Set([...prev, ...cameraIds]))
+      setSyncingCameras(prev => {
+        const merged = new Set<number>()
+        prev.forEach(id => merged.add(id))
+        cameraIds.forEach(id => merged.add(id))
+        return merged
+      })
 
       const response = await fetch('http://localhost:8000/api/v1/sync', {
         method: 'POST',
@@ -258,6 +263,20 @@ export default function CamerasPage() {
         return <span className="text-gray-400">Non synchronisé</span>
     }
   }
+
+  const filteredCameras = cameras.filter((camera) => {
+    const normalizedSearch = searchTerm.trim().toLowerCase()
+    const matchesSearch =
+      normalizedSearch.length === 0 ||
+      camera.name.toLowerCase().includes(normalizedSearch) ||
+      camera.vendor.toLowerCase().includes(normalizedSearch) ||
+      camera.product.toLowerCase().includes(normalizedSearch)
+
+    const matchesCriticity =
+      criticityFilter === 'all' || camera.criticity === criticityFilter
+
+    return matchesSearch && matchesCriticity
+  })
 
   if (isLoading) {
     return (
