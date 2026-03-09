@@ -9,11 +9,28 @@ export default function Navbar() {
   const router = useRouter()
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [user, setUser] = useState<{ username: string } | null>(null)
+  const [countdown, setCountdown] = useState(60)
 
   useEffect(() => {
     // Check if user is logged in
     checkAuth()
   }, [])
+
+  useEffect(() => {
+    // Auto-refresh timer
+    const timer = setInterval(() => {
+      setCountdown((prev) => {
+        if (prev <= 1 && !isRefreshing) {
+          // Time to refresh, but only if not already refreshing
+          handleAutoRefresh()
+          return 60 // Reset countdown
+        }
+        return prev - 1
+      })
+    }, 1000)
+
+    return () => clearInterval(timer)
+  }, [isRefreshing])
 
   const checkAuth = async () => {
     try {
@@ -37,11 +54,27 @@ export default function Navbar() {
       if (response.ok) {
         // Force page refresh to show new data
         router.refresh()
+        setCountdown(60) // Reset countdown after manual refresh
       }
     } catch (error) {
       console.error('Failed to refresh data:', error)
     } finally {
       setIsRefreshing(false)
+    }
+  }
+
+  const handleAutoRefresh = async () => {
+    try {
+      const response = await fetch('/api/refresh', {
+        method: 'POST',
+      })
+      
+      if (response.ok) {
+        // Force page refresh to show new data
+        router.refresh()
+      }
+    } catch (error) {
+      console.error('Failed to auto-refresh data:', error)
     }
   }
 
@@ -87,13 +120,18 @@ export default function Navbar() {
             >
               Gestion Caméras
             </Link>
-            <button 
-              className={`cyber-button ${isRefreshing ? 'opacity-50 cursor-not-allowed' : ''}`}
-              onClick={handleRefresh}
-              disabled={isRefreshing}
-            >
-              {isRefreshing ? 'Actualisation...' : 'Actualiser'}
-            </button>
+            <div className="flex items-center space-x-2">
+              <div className="text-sm text-gray-400">
+                Actualisation dans <span className={`font-mono ${isRefreshing ? 'text-yellow-400' : 'text-cyber-blue'}`}>{countdown}s</span>
+              </div>
+              <button 
+                className={`cyber-button ${isRefreshing ? 'opacity-50 cursor-not-allowed' : ''}`}
+                onClick={handleRefresh}
+                disabled={isRefreshing}
+              >
+                {isRefreshing ? 'Actualisation...' : 'Actualiser'}
+              </button>
+            </div>
             {user && (
               <div className="flex items-center space-x-3">
                 <span className="text-gray-300">Bonjour, {user.username}</span>

@@ -310,6 +310,7 @@ class Database:
                 uc.id AS user_camera_id,
                 c.vendor,
                 c.product,
+                c.criticity,
                 c.version,
                 uc.nickname AS user_nickname
             FROM user_cameras uc

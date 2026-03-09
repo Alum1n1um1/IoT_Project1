@@ -27,6 +27,7 @@ export interface CVE {
     url: string
     source: string
   }>
+  inKev?: boolean // Whether this CVE is in CISA Known Exploited Vulnerabilities
 }
 
 export interface CWE {
@@ -60,7 +61,7 @@ export interface IoTDeviceWithVulnerabilities {
   lastSeen: string
   ipAddress: string
   manufacturer: string
-  vulnerabilities?: {
+  vulnerabilities: {
     cves: CVE[]
     cwes: CWE[]
     kves: KVE[]
@@ -69,5 +70,11 @@ export interface IoTDeviceWithVulnerabilities {
     highCount: number // CVE with CVSS 7.0-8.9
     mediumCount: number // CVE with CVSS 4.0-6.9
     lastUpdated: string // ISO string
+    recommendations?: Array<{
+      title: string
+      description: string
+      priority: 'critical' | 'high' | 'medium' | 'low'
+      cwe?: string
+    }>
   }
 }

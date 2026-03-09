@@ -8,6 +8,7 @@ export interface Camera {
   criticity: 'low' | 'medium' | 'high' | 'critical'
   created_at: string
   updated_at: string
+  sync_status?: 'pending' | 'syncing' | 'completed' | 'failed'
 }
 
 export interface CreateCameraData {
@@ -38,15 +39,31 @@ export async function createCamera(userId: number, cameraData: CreateCameraData)
   try {
     const client = await pool.connect()
     
-    const result = await client.query(
+    // Start transaction
+    await client.query('BEGIN')
+    
+    // Insert into cameras
+    const cameraResult = await client.query(
       `INSERT INTO cameras (user_id, name, vendor, product, criticity) 
        VALUES ($1, $2, $3, $4, $5) 
        RETURNING *`,
       [userId, cameraData.name, cameraData.vendor, cameraData.product, cameraData.criticity]
     )
     
+    const camera = cameraResult.rows[0]
+    
+    // Insert into user_cameras
+    await client.query(
+      `INSERT INTO user_cameras (user_id, camera_id) 
+       VALUES ($1, $2)`,
+      [userId, camera.id]
+    )
+    
+    // Commit transaction
+    await client.query('COMMIT')
+    
     client.release()
-    return result.rows[0]
+    return camera
   } catch (error) {
     console.error('Error creating camera:', error)
     return null

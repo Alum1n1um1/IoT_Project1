@@ -7,6 +7,43 @@ interface EditingCamera extends Camera {
   isEditing: boolean
 }
 
+const CAMERA_MODELS = {
+  'Hikvision': [
+    'DS-2CD2085FWD-I',
+    'DS-2CD2143G0-I',
+    'DS-2DE3304W-DE',
+    'DS-2CD2347G2-LU'
+  ],
+  'Dahua': [
+    'IPC-HDBW4431R-ZS',
+    'IPC-HFW5241E-ZE',
+    'SD49225T-HN',
+    'IPC-HDBW2431E-S'
+  ],
+  'Axis': [
+    'M3045-V',
+    'P3245-LVE',
+    'Q6075-E',
+    'M1135'
+  ],
+  'Amcrest': [
+    'IP8M-2496EB',
+    'IP5M-T1179EW',
+    'IP4M-1051B'
+  ],
+  'Reolink': [
+    'RLC-810A',
+    'RLC-520',
+    'Lumus',
+    'E1 Zoom'
+  ],
+  'Bosch': [
+    'DINION IP 5000',
+    'AUTODOME IP 5000i',
+    'FLEXIDOME IP starlight 8000i'
+  ]
+}
+
 export default function CamerasPage() {
   const [cameras, setCameras] = useState<EditingCamera[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -18,6 +55,9 @@ export default function CamerasPage() {
     criticity: 'medium' as const
   })
   const [isAddingCamera, setIsAddingCamera] = useState(false)
+  const [searchTerm, setSearchTerm] = useState('')
+  const [criticityFilter, setCriticityFilter] = useState('all')
+  const [syncingCameras, setSyncingCameras] = useState<Set<number>>(new Set())
 
   useEffect(() => {
     fetchCameras()
@@ -30,11 +70,69 @@ export default function CamerasPage() {
       
       if (data.success) {
         setCameras(data.cameras.map((camera: Camera) => ({ ...camera, isEditing: false })))
+        
+        // Trigger vulnerability sync for all cameras on first load
+        const cameraIds = data.cameras.map((c: Camera) => c.id)
+        if (cameraIds.length > 0) {
+          triggerVulnerabilitySync(cameraIds)
+        }
       }
     } catch (error) {
       console.error('Error fetching cameras:', error)
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  const triggerVulnerabilitySync = async (cameraIds: number[]) => {
+    try {
+      // Mark cameras as syncing
+      setSyncingCameras(prev => new Set([...prev, ...cameraIds]))
+
+      const response = await fetch('http://localhost:8000/api/v1/sync', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          camera_ids: cameraIds,
+          max_results: 100
+        }),
+        signal: AbortSignal.timeout(30000)
+      })
+
+      if (!response.ok) {
+        console.warn('Vulnerability sync failed:', response.status)
+        // Mark cameras as failed
+        setCameras(prev => prev.map(camera => 
+          cameraIds.includes(camera.id) 
+            ? { ...camera, sync_status: 'failed' as const }
+            : camera
+        ))
+      } else {
+        console.log('Vulnerability sync completed for cameras:', cameraIds)
+        // Mark cameras as completed
+        setCameras(prev => prev.map(camera => 
+          cameraIds.includes(camera.id) 
+            ? { ...camera, sync_status: 'completed' as const }
+            : camera
+        ))
+      }
+    } catch (error) {
+      console.warn('Failed to trigger vulnerability sync:', error)
+      // Mark cameras as failed
+      setCameras(prev => prev.map(camera => 
+        cameraIds.includes(camera.id) 
+          ? { ...camera, sync_status: 'failed' as const }
+          : camera
+      ))
+    } finally {
+      // Remove from syncing set
+      setSyncingCameras(prev => {
+        const newSet = new Set(prev)
+        cameraIds.forEach(id => newSet.delete(id))
+        return newSet
+      })
     }
   }
 
@@ -141,6 +239,26 @@ export default function CamerasPage() {
     }
   }
 
+  const getSyncStatusDisplay = (camera: EditingCamera) => {
+    if (syncingCameras.has(camera.id)) {
+      return (
+        <div className="flex items-center text-yellow-400">
+          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-yellow-400 mr-2"></div>
+          Synchronisation...
+        </div>
+      )
+    }
+
+    switch (camera.sync_status) {
+      case 'completed':
+        return <span className="text-green-400">✓ Synchronisé</span>
+      case 'failed':
+        return <span className="text-red-400">✗ Échec</span>
+      default:
+        return <span className="text-gray-400">Non synchronisé</span>
+    }
+  }
+
   if (isLoading) {
     return (
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -177,23 +295,40 @@ export default function CamerasPage() {
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-1">Marque</label>
-              <input
-                type="text"
+              <select
                 value={newCamera.vendor}
-                onChange={(e) => setNewCamera(prev => ({ ...prev, vendor: e.target.value }))}
+                onChange={(e) => setNewCamera(prev => ({ ...prev, vendor: e.target.value, product: '' }))}
                 className="w-full px-3 py-2 bg-dark-bg border border-gray-600 rounded text-white"
-                placeholder="Marque"
-              />
+              >
+                <option value="">Sélectionner une marque</option>
+                {Object.keys(CAMERA_MODELS).map(vendor => (
+                  <option key={vendor} value={vendor}>{vendor}</option>
+                ))}
+                <option value="Autre">Autre</option>
+              </select>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-1">Modèle</label>
-              <input
-                type="text"
-                value={newCamera.product}
-                onChange={(e) => setNewCamera(prev => ({ ...prev, product: e.target.value }))}
-                className="w-full px-3 py-2 bg-dark-bg border border-gray-600 rounded text-white"
-                placeholder="Modèle"
-              />
+              {newCamera.vendor === 'Autre' || !newCamera.vendor ? (
+                <input
+                  type="text"
+                  value={newCamera.product}
+                  onChange={(e) => setNewCamera(prev => ({ ...prev, product: e.target.value }))}
+                  className="w-full px-3 py-2 bg-dark-bg border border-gray-600 rounded text-white"
+                  placeholder="Modèle"
+                />
+              ) : (
+                <select
+                  value={newCamera.product}
+                  onChange={(e) => setNewCamera(prev => ({ ...prev, product: e.target.value }))}
+                  className="w-full px-3 py-2 bg-dark-bg border border-gray-600 rounded text-white"
+                >
+                  <option value="">Sélectionner un modèle</option>
+                  {CAMERA_MODELS[newCamera.vendor as keyof typeof CAMERA_MODELS]?.map(model => (
+                    <option key={model} value={model}>{model}</option>
+                  ))}
+                </select>
+              )}
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-1">Criticité</label>
@@ -229,11 +364,47 @@ export default function CamerasPage() {
         </div>
       )}
 
+      {/* Search and Filter Controls */}
+      <div className="threat-card mb-6">
+        <div className="flex flex-col sm:flex-row gap-4 items-center">
+          <div className="flex-1">
+            <label className="block text-sm font-medium text-gray-300 mb-1">Rechercher</label>
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full px-3 py-2 bg-dark-bg border border-gray-600 rounded text-white placeholder-gray-400"
+              placeholder="Rechercher par nom, marque ou modèle..."
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-1">Filtrer par Criticité</label>
+            <select
+              value={criticityFilter}
+              onChange={(e) => setCriticityFilter(e.target.value)}
+              className="px-3 py-2 bg-dark-bg border border-gray-600 rounded text-white"
+            >
+              <option value="all">Toutes les criticités</option>
+              <option value="critical">Critique</option>
+              <option value="high">Élevée</option>
+              <option value="medium">Moyenne</option>
+              <option value="low">Faible</option>
+            </select>
+          </div>
+          <div className="text-sm text-gray-400">
+            {filteredCameras.length} caméra{filteredCameras.length !== 1 ? 's' : ''} trouvée{filteredCameras.length !== 1 ? 's' : ''}
+          </div>
+        </div>
+      </div>
+
       {/* Cameras Table */}
       <div className="threat-card">
-        {cameras.length === 0 ? (
+        {filteredCameras.length === 0 ? (
           <div className="text-center py-8 text-gray-400">
-            Aucune caméra trouvée. Cliquez sur "Ajouter Caméra" pour commencer.
+            {cameras.length === 0 
+              ? 'Aucune caméra trouvée. Cliquez sur "Ajouter Caméra" pour commencer.'
+              : 'Aucune caméra ne correspond aux critères de recherche.'
+            }
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -244,11 +415,12 @@ export default function CamerasPage() {
                   <th className="py-3 px-4 text-cyber-blue font-semibold">Marque</th>
                   <th className="py-3 px-4 text-cyber-blue font-semibold">Modèle</th>
                   <th className="py-3 px-4 text-cyber-blue font-semibold">Criticité</th>
+                  <th className="py-3 px-4 text-cyber-blue font-semibold">Statut Sync</th>
                   <th className="py-3 px-4 text-cyber-blue font-semibold">Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {cameras.map((camera) => (
+                {filteredCameras.map((camera) => (
                   <tr key={camera.id} className="border-b border-gray-700">
                     {camera.isEditing ? (
                       <>
@@ -263,24 +435,44 @@ export default function CamerasPage() {
                           />
                         </td>
                         <td className="py-3 px-4">
-                          <input
-                            type="text"
+                          <select
                             value={camera.vendor}
                             onChange={(e) => setCameras(prev => prev.map(c =>
-                              c.id === camera.id ? { ...c, vendor: e.target.value } : c
+                              c.id === camera.id ? { ...c, vendor: e.target.value, product: '' } : c
                             ))}
                             className="w-full px-2 py-1 bg-dark-bg border border-gray-600 rounded text-white text-sm"
-                          />
+                          >
+                            <option value="">Sélectionner une marque</option>
+                            {Object.keys(CAMERA_MODELS).map(vendor => (
+                              <option key={vendor} value={vendor}>{vendor}</option>
+                            ))}
+                            <option value="Autre">Autre</option>
+                          </select>
                         </td>
                         <td className="py-3 px-4">
-                          <input
-                            type="text"
-                            value={camera.product}
-                            onChange={(e) => setCameras(prev => prev.map(c =>
-                              c.id === camera.id ? { ...c, product: e.target.value } : c
-                            ))}
-                            className="w-full px-2 py-1 bg-dark-bg border border-gray-600 rounded text-white text-sm"
-                          />
+                          {camera.vendor === 'Autre' || !Object.keys(CAMERA_MODELS).includes(camera.vendor) ? (
+                            <input
+                              type="text"
+                              value={camera.product}
+                              onChange={(e) => setCameras(prev => prev.map(c =>
+                                c.id === camera.id ? { ...c, product: e.target.value } : c
+                              ))}
+                              className="w-full px-2 py-1 bg-dark-bg border border-gray-600 rounded text-white text-sm"
+                            />
+                          ) : (
+                            <select
+                              value={camera.product}
+                              onChange={(e) => setCameras(prev => prev.map(c =>
+                                c.id === camera.id ? { ...c, product: e.target.value } : c
+                              ))}
+                              className="w-full px-2 py-1 bg-dark-bg border border-gray-600 rounded text-white text-sm"
+                            >
+                              <option value="">Sélectionner un modèle</option>
+                              {CAMERA_MODELS[camera.vendor as keyof typeof CAMERA_MODELS]?.map(model => (
+                                <option key={model} value={model}>{model}</option>
+                              ))}
+                            </select>
+                          )}
                         </td>
                         <td className="py-3 px-4">
                           <select
@@ -295,6 +487,9 @@ export default function CamerasPage() {
                             <option value="high">Élevée</option>
                             <option value="critical">Critique</option>
                           </select>
+                        </td>
+                        <td className="py-3 px-4">
+                          {getSyncStatusDisplay(camera)}
                         </td>
                         <td className="py-3 px-4">
                           <div className="flex gap-2">
@@ -319,11 +514,22 @@ export default function CamerasPage() {
                         <td className="py-3 px-4 text-gray-300">{camera.vendor}</td>
                         <td className="py-3 px-4 text-gray-300">{camera.product}</td>
                         <td className="py-3 px-4">
-                          <span className={`px-2 py-1 rounded text-xs font-semibold border ${getCriticityBg(camera.criticity)}`}>
-                            <span className={getCriticityColor(camera.criticity)}>
-                              {camera.criticity.charAt(0).toUpperCase() + camera.criticity.slice(1)}
-                            </span>
+                          <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold border ${
+                            camera.criticity === 'critical'
+                              ? 'bg-red-500/20 text-red-400 border-red-500/50'
+                              : camera.criticity === 'high'
+                                ? 'bg-orange-500/20 text-orange-400 border-orange-500/50'
+                                : camera.criticity === 'medium'
+                                  ? 'bg-yellow-500/20 text-yellow-400 border-yellow-500/50'
+                                  : 'bg-green-500/20 text-green-400 border-green-500/50'
+                          }`}>
+                            {camera.criticity === 'low' ? 'Faible' :
+                             camera.criticity === 'medium' ? 'Moyenne' :
+                             camera.criticity === 'high' ? 'Élevée' : 'Critique'}
                           </span>
+                        </td>
+                        <td className="py-3 px-4">
+                          {getSyncStatusDisplay(camera)}
                         </td>
                         <td className="py-3 px-4">
                           <div className="relative">

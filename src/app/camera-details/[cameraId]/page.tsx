@@ -3,9 +3,9 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
-import { CVE, CWE, KVE } from '@/types/nvd'
+import { CVE, CWE, KVE, IoTDeviceWithVulnerabilities } from '@/types/nvd'
 
-interface VulnerabilityData {
+interface VulnerabilityResponse {
   success: boolean
   device: {
     id: string
@@ -24,16 +24,44 @@ interface VulnerabilityData {
     highCount: number
     mediumCount: number
     lastUpdated: string
+    recommendations?: Array<{
+      title: string
+      description: string
+      priority: 'critical' | 'high' | 'medium' | 'low'
+      cwe?: string
+    }>
   }
 }
+
 
 export default function CameraDetails() {
   const params = useParams()
   const cameraId = params.cameraId as string
 
-  const [data, setData] = useState<VulnerabilityData | null>(null)
+  const [data, setData] = useState<VulnerabilityResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+
+  const calculatePrioritizedRiskScore = (cves: CVE[]): number => {
+    if (cves.length === 0) return 0
+
+    let totalScore = 0
+    let count = 0
+
+    cves.forEach(cve => {
+      const cvss = cve.metrics?.cvssV3?.baseScore || cve.metrics?.cvssV2?.baseScore || 0
+      // Note: EPSS data would need to be fetched from database, for now using a placeholder
+      const epss = 0.1 // Placeholder, should be fetched from DB
+      const kev = cve.inKev ? 1 : 0
+
+      // Formula: (0.6 * CVSS/10 + 0.3 * EPSS + 0.1 * KEV) * 100
+      const riskScore = (0.6 * (cvss / 10) + 0.3 * epss + 0.1 * kev) * 100
+      totalScore += riskScore
+      count++
+    })
+
+    return count > 0 ? Math.round(totalScore / count) : 0
+  }
 
   useEffect(() => {
     const fetchData = async () => {
@@ -111,19 +139,19 @@ export default function CameraDetails() {
           </div>
           <div>
             <p className="text-xs text-gray-500 uppercase tracking-wider">Criticité</p>
-            <p
-              className={`text-lg font-semibold capitalize ${
-                device.criticality === 'critical'
-                  ? 'text-cyber-red'
-                  : device.criticality === 'high'
-                    ? 'text-orange-500'
-                    : device.criticality === 'medium'
-                      ? 'text-yellow-500'
-                      : 'text-cyber-green'
-              }`}
-            >
-              {device.criticality}
-            </p>
+            <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold ${
+              device.criticality === 'critical'
+                ? 'bg-red-500/20 text-red-400 border border-red-500/50'
+                : device.criticality === 'high'
+                  ? 'bg-orange-500/20 text-orange-400 border border-orange-500/50'
+                  : device.criticality === 'medium'
+                    ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/50'
+                    : 'bg-green-500/20 text-green-400 border border-green-500/50'
+            }`}>
+              {device.criticality === 'low' ? 'Faible' :
+               device.criticality === 'medium' ? 'Moyenne' :
+               device.criticality === 'high' ? 'Élevée' : 'Critique'}
+            </span>
           </div>
           <div>
             <p className="text-xs text-gray-500 uppercase tracking-wider">Fabricant</p>
@@ -140,6 +168,24 @@ export default function CameraDetails() {
           <p className="text-xs text-gray-500 mt-2">/10</p>
         </div>
 
+        <div className="threat-card relative">
+          <h3 className="text-sm font-semibold text-gray-400 uppercase mb-2">Score de Risque Priorisé</h3>
+          <p className="text-3xl font-bold text-red-400">{calculatePrioritizedRiskScore(vulnerabilities.cves)}</p>
+          <p className="text-xs text-gray-500 mt-2">/100</p>
+          <div className="absolute top-2 right-2">
+            <div className="group relative">
+              <button className="text-gray-400 hover:text-white text-sm">ℹ️</button>
+              <div className="absolute bottom-full right-0 mb-2 hidden group-hover:block w-64 p-3 bg-gray-800 text-white text-xs rounded shadow-lg border border-gray-600 z-10">
+                <p className="font-semibold mb-1">Formule de calcul :</p>
+                <p>(0.6 × CVSS/10 + 0.3 × EPSS + 0.1 × KEV) × 100</p>
+                <p className="mt-2">CVSS: Sévérité technique (0-10)</p>
+                <p>EPSS: Probabilité d'exploitation (0-1)</p>
+                <p>KEV: Exploitation connue (0-1)</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div className="threat-card">
           <h3 className="text-sm font-semibold text-gray-400 uppercase mb-2">Critiques</h3>
           <p className="text-3xl font-bold text-cyber-red">{vulnerabilities.criticalCount}</p>
@@ -151,18 +197,45 @@ export default function CameraDetails() {
           <p className="text-3xl font-bold text-orange-500">{vulnerabilities.highCount}</p>
           <p className="text-xs text-gray-500 mt-2">CVE CVSS 7.0-8.9</p>
         </div>
-
-        <div className="threat-card">
-          <h3 className="text-sm font-semibold text-gray-400 uppercase mb-2">Moyennes</h3>
-          <p className="text-3xl font-bold text-yellow-500">{vulnerabilities.mediumCount}</p>
-          <p className="text-xs text-gray-500 mt-2">CVE CVSS 4.0-6.9</p>
-        </div>
       </div>
 
       {/* Last Updated */}
       <div className="text-sm text-gray-500 mb-8">
         Dernière mise à jour: {new Date(vulnerabilities.lastUpdated).toLocaleString('fr-FR')}
       </div>
+
+      {/* Recommendations Section */}
+      {vulnerabilities.recommendations && vulnerabilities.recommendations.length > 0 && (
+        <div className="threat-card mb-8">
+          <h3 className="text-lg font-semibold text-cyber-blue mb-4 flex items-center">
+            <span className="mr-2">🛡️</span>
+            Recommandations de Sécurité
+          </h3>
+          <div className="space-y-3">
+            {vulnerabilities.recommendations.map((rec, index) => (
+              <div key={index} className="flex items-start space-x-3 p-3 bg-gray-800 rounded-lg border border-gray-600">
+                <div className="flex-shrink-0">
+                  <span className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold ${
+                    rec.priority === 'critical' ? 'bg-red-600 text-white' :
+                    rec.priority === 'high' ? 'bg-orange-600 text-white' :
+                    rec.priority === 'medium' ? 'bg-yellow-600 text-white' :
+                    'bg-blue-600 text-white'
+                  }`}>
+                    {rec.priority === 'critical' ? 'C' : rec.priority === 'high' ? 'H' : rec.priority === 'medium' ? 'M' : 'L'}
+                  </span>
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm text-gray-200 font-medium">{rec.title}</p>
+                  <p className="text-xs text-gray-400 mt-1">{rec.description}</p>
+                  {rec.cwe && (
+                    <p className="text-xs text-cyber-blue mt-1">CWE: {rec.cwe}</p>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* CVEs Section */}
       <div className="threat-card mb-8">

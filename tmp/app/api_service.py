@@ -22,6 +22,19 @@ def _severity_from_cvss(cvss_score: float | None) -> str:
     return "low"
 
 
+def _get_criticality_multiplier(criticity: str) -> float:
+    criticity = criticity.lower()
+    if criticity == "low":
+        return 0.5
+    elif criticity == "medium":
+        return 1.0
+    elif criticity == "high":
+        return 1.5
+    elif criticity == "critical":
+        return 2.0
+    return 1.0
+
+
 def _extract_description(descriptions: Any) -> str:
     if isinstance(descriptions, list) and descriptions:
         first = descriptions[0]
@@ -111,12 +124,14 @@ def get_threats_summary():
                 cve_id,
                 published,
                 descriptions,
-                cvss_score
+                cvss_score,
+                criticity
             FROM (
                 SELECT DISTINCT ON (c.id)
                     c.id AS cve_id,
                     c.published,
                     c.descriptions,
+                    cam.criticity,
                     COALESCE(
                         NULLIF(c.metrics->'cvssV3'->>'baseScore', '')::float,
                         NULLIF(c.metrics->'cvssV2'->>'baseScore', '')::float,
@@ -124,6 +139,7 @@ def get_threats_summary():
                         0
                     ) AS cvss_score
                 FROM user_cameras uc
+                INNER JOIN cameras cam ON cam.id = uc.camera_id
                 INNER JOIN camera_cves cc ON cc.camera_id = uc.camera_id
                 INNER JOIN cves c ON c.id = cc.cve_id
                 WHERE uc.user_id = %s
@@ -134,8 +150,16 @@ def get_threats_summary():
             (user_id,),
         )
 
-        scores = [float(r.get("cvss_score") or 0.0) for r in rows if float(r.get("cvss_score") or 0.0) > 0]
-        vulnerability_score = int(round((sum(scores) / len(scores)) * 10)) if scores else 0
+        # Calculate adjusted scores
+        adjusted_scores = []
+        for row in rows:
+            cvss = float(row.get("cvss_score") or 0.0)
+            if cvss > 0:
+                criticity = row.get("criticity", "medium")
+                multiplier = _get_criticality_multiplier(criticity)
+                adjusted_scores.append(cvss * multiplier)
+        
+        vulnerability_score = int(round((sum(adjusted_scores) / len(adjusted_scores)) * 10)) if adjusted_scores else 0
 
         recent = []
         for row in rows[:4]:
@@ -182,13 +206,19 @@ def get_devices_status():
 
             scores = [float(v.get("cvss_score") or 0.0) for v in vulns if float(v.get("cvss_score") or 0.0) > 0]
             avg_cvss = (sum(scores) / len(scores)) if scores else 0.0
+            
+            # Apply criticality coefficient
+            criticity = cam.get("criticity", "medium")
+            multiplier = _get_criticality_multiplier(criticity)
+            adjusted_avg_cvss = avg_cvss * multiplier
+            
             critical_count = sum(1 for v in vulns if float(v.get("cvss_score") or 0.0) >= 9.0)
             high_count = sum(1 for v in vulns if 7.0 <= float(v.get("cvss_score") or 0.0) < 9.0)
             medium_count = sum(1 for v in vulns if 4.0 <= float(v.get("cvss_score") or 0.0) < 7.0)
 
-            if avg_cvss >= 9.0:
+            if adjusted_avg_cvss >= 9.0:
                 status = "vulnerable"
-            elif avg_cvss >= 7.0:
+            elif adjusted_avg_cvss >= 7.0 or criticity == "critical":
                 status = "warning"
             else:
                 status = "secure"
@@ -215,7 +245,7 @@ def get_devices_status():
                             for v in vulns
                             if bool(v.get("kev_ransomware"))
                         ],
-                        "cvssScore": round(avg_cvss, 2),
+                        "cvssScore": round(avg_cvss, 2),  # Keep original CVSS score (0-10)
                         "criticalCount": critical_count,
                         "highCount": high_count,
                         "mediumCount": medium_count,
