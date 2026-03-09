@@ -41,6 +41,10 @@ export default function CameraDetails() {
   const [data, setData] = useState<VulnerabilityResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [recommendationPriorityFilter, setRecommendationPriorityFilter] = useState('all')
+  const [cveSearchTerm, setCveSearchTerm] = useState('')
+  const [cveSeverityFilter, setCveSeverityFilter] = useState('all')
+  const [cveKevFilter, setCveKevFilter] = useState('all')
 
   const calculatePrioritizedRiskScore = (cves: CVE[]): number => {
     if (cves.length === 0) return 0
@@ -117,6 +121,37 @@ export default function CameraDetails() {
   }
 
   const { device, vulnerabilities } = data
+
+  const recommendationList = vulnerabilities.recommendations || []
+  const filteredRecommendations = recommendationList.filter((rec) => {
+    return recommendationPriorityFilter === 'all' || rec.priority === recommendationPriorityFilter
+  })
+
+  const normalizedCveSearch = cveSearchTerm.trim().toLowerCase()
+  const getCveSeverity = (cve: CVE): 'critical' | 'high' | 'medium' | 'low' => {
+    const score = cve.metrics?.cvssV3?.baseScore || cve.metrics?.cvssV2?.baseScore || 0
+    if (score >= 9) return 'critical'
+    if (score >= 7) return 'high'
+    if (score >= 4) return 'medium'
+    return 'low'
+  }
+
+  const filteredCVEs = vulnerabilities.cves.filter((cve) => {
+    const matchesSearch =
+      normalizedCveSearch.length === 0 ||
+      cve.id.toLowerCase().includes(normalizedCveSearch) ||
+      (cve.descriptions[0]?.value || '').toLowerCase().includes(normalizedCveSearch)
+
+    const matchesSeverity =
+      cveSeverityFilter === 'all' || getCveSeverity(cve) === cveSeverityFilter
+
+    const matchesKev =
+      cveKevFilter === 'all' ||
+      (cveKevFilter === 'kev-only' && Boolean(cve.inKev)) ||
+      (cveKevFilter === 'non-kev' && !cve.inKev)
+
+    return matchesSearch && matchesSeverity && matchesKev
+  })
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -205,14 +240,36 @@ export default function CameraDetails() {
       </div>
 
       {/* Recommendations Section */}
-      {vulnerabilities.recommendations && vulnerabilities.recommendations.length > 0 && (
+      {recommendationList.length > 0 && (
         <div className="threat-card mb-8">
           <h3 className="text-lg font-semibold text-cyber-blue mb-4 flex items-center">
             <span className="mr-2">🛡️</span>
             Recommandations de Sécurité
           </h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-1">Priorité recommandation</label>
+              <select
+                value={recommendationPriorityFilter}
+                onChange={(e) => setRecommendationPriorityFilter(e.target.value)}
+                className="w-full px-3 py-2 bg-dark-bg border border-gray-600 rounded text-white"
+              >
+                <option value="all">Toutes</option>
+                <option value="critical">Critique</option>
+                <option value="high">Élevée</option>
+                <option value="medium">Moyenne</option>
+                <option value="low">Faible</option>
+              </select>
+            </div>
+            <div className="text-sm text-gray-400 flex items-end">
+              {filteredRecommendations.length} recommandation{filteredRecommendations.length !== 1 ? 's' : ''}
+            </div>
+          </div>
           <div className="space-y-3">
-            {vulnerabilities.recommendations.map((rec, index) => (
+            {filteredRecommendations.length === 0 ? (
+              <div className="text-sm text-gray-400">Aucune recommandation ne correspond au filtre sélectionné.</div>
+            ) : (
+              filteredRecommendations.map((rec, index) => (
               <div key={index} className="flex items-start space-x-3 p-3 bg-gray-800 rounded-lg border border-gray-600">
                 <div className="flex-shrink-0">
                   <span className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold ${
@@ -232,7 +289,8 @@ export default function CameraDetails() {
                   )}
                 </div>
               </div>
-            ))}
+              ))
+            )}
           </div>
         </div>
       )}
@@ -240,14 +298,53 @@ export default function CameraDetails() {
       {/* CVEs Section */}
       <div className="threat-card mb-8">
         <h2 className="text-2xl font-bold text-cyber-blue mb-4">
-          Vulnérabilités CVE ({vulnerabilities.cves.length})
+          Vulnérabilités CVE ({filteredCVEs.length}/{vulnerabilities.cves.length})
         </h2>
 
-        {vulnerabilities.cves.length === 0 ? (
-          <p className="text-gray-400">Aucune vulnérabilité trouvée pour ce modèle.</p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-1">Recherche CVE</label>
+            <input
+              type="text"
+              value={cveSearchTerm}
+              onChange={(e) => setCveSearchTerm(e.target.value)}
+              className="w-full px-3 py-2 bg-dark-bg border border-gray-600 rounded text-white placeholder-gray-400"
+              placeholder="ID CVE ou description..."
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-1">Sévérité CVE</label>
+            <select
+              value={cveSeverityFilter}
+              onChange={(e) => setCveSeverityFilter(e.target.value)}
+              className="w-full px-3 py-2 bg-dark-bg border border-gray-600 rounded text-white"
+            >
+              <option value="all">Toutes</option>
+              <option value="critical">Critique</option>
+              <option value="high">Élevée</option>
+              <option value="medium">Moyenne</option>
+              <option value="low">Faible</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-1">Statut KEV</label>
+            <select
+              value={cveKevFilter}
+              onChange={(e) => setCveKevFilter(e.target.value)}
+              className="w-full px-3 py-2 bg-dark-bg border border-gray-600 rounded text-white"
+            >
+              <option value="all">Tous</option>
+              <option value="kev-only">KEV uniquement</option>
+              <option value="non-kev">Sans KEV</option>
+            </select>
+          </div>
+        </div>
+
+        {filteredCVEs.length === 0 ? (
+          <p className="text-gray-400">Aucune vulnérabilité ne correspond aux filtres.</p>
         ) : (
           <div className="space-y-4">
-            {vulnerabilities.cves.map(cve => (
+            {filteredCVEs.map(cve => (
               <div key={cve.id} className="p-4 bg-gray-800 rounded border-l-4 border-gray-600">
                 <div className="flex items-start justify-between mb-2">
                   <a
