@@ -108,7 +108,4 @@ Créez un fichier `.env.local` pour le développement local :
 ```env
 # Base de données
 DATABASE_URL=postgresql://postgres:password@localhost:5432/iot_security
-
-# Clés API (pour usage futur)
-API_KEY=
 ```
